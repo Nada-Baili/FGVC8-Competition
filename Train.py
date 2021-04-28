@@ -15,6 +15,7 @@ from utils import *
 import prepare_data
 from transform import *
 from ResNext import resnext
+from model import *
 
 if torch.cuda.is_available():
     device = "cuda"
@@ -32,7 +33,8 @@ def Train():
     labels = pd.read_csv('./data/label_map.csv')
     train = pd.read_csv('./data/train-from-kaggle.csv')
 
-    model = resnext(params["nb_classes"]).to(device)
+    #model = resnext(params["nb_classes"]).to(device)
+    model = se_resnext101_32x4d().to(device)
     #print(summary(model, (3,320,320)))
 
     folds = train.copy()

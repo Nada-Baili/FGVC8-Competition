@@ -15,6 +15,7 @@ from utils import *
 import prepare_data
 from transform import *
 from ResNext import resnext
+from model import *
 
 if torch.cuda.is_available():
     device = "cuda"
@@ -36,7 +37,7 @@ def Test(weights_path):
                                       is_Train=False)
     test_loader = DataLoader(test_dataset, batch_size=params["batch_size"], shuffle=False)
 
-    model = resnext(params["nb_classes"]).to(device)
+    model = se_resnext101_32x4d().to(device)
     model.load_state_dict(torch.load(weights_path))
 
     preds = []
@@ -62,4 +63,4 @@ def Test(weights_path):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    Test()
+    Test(args.Weights_Path)

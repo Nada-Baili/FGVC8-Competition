@@ -14,7 +14,6 @@ class resnext(nn.Module):
 
         self.backbone = models.resnext101_32x8d(pretrained=True)
         #self.backbone.load_state_dict(torch.load("./models/resnet18.pth"))
-
         self.fc = nn.Linear(2048, num_classes)
 
     def forward(self, x):
