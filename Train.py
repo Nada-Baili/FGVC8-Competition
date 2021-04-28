@@ -1,0 +1,145 @@
+import os, torch, time
+from tqdm import tqdm
+import torch.nn as nn
+from datetime import datetime
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MultiLabelBinarizer
+from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+from torch.utils.data import DataLoader
+from torchsummary import summary
+from torch.optim import Adam, SGD
+from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
+
+from utils import *
+import prepare_data
+from transform import *
+from ResNext import resnext
+
+if torch.cuda.is_available():
+    device = "cuda"
+    torch.backends.cudnn.benchmark = True
+else:
+    device = "cpu"
+
+def Train():
+    today = datetime.now()
+    output_path = "./results/{}".format(today.strftime("%H_%M_%S_%d_%m_%Y"))
+    os.mkdir(output_path)
+
+    labels = pd.read_csv('./data/label_map.csv')
+    train = pd.read_csv('./data/train-from-kaggle.csv')
+
+    model = resnext(params["nb_classes"]).to(device)
+    #print(summary(model, (3,320,320)))
+
+    folds = train.copy()
+    folds = make_folds(folds, params["n_folds"], params["SEED"])
+    for FOLD in range(5):
+
+        trn_idx = folds[folds['fold'] != FOLD].index
+        val_idx = folds[folds['fold'] == FOLD].index
+
+    # mlb = MultiLabelBinarizer()
+    # y = [[int(x) for x in row] for row in train.attribute_ids.str.split()]
+    # y = mlb.fit_transform(y)
+    # X = list(train.id)
+    #
+    # mskf = MultilabelStratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    # for train_index, test_index in mskf.split(X, y):
+    #     print("TRAIN:", train_index, "TEST:", test_index)
+    #     X_train, X_test = X[train_index], X[test_index]
+    #     y_train, y_test = y[train_index], y[test_index]
+    #
+        train_dataset = prepare_data.Data(params,
+                                          folds.loc[trn_idx].reset_index(drop=True),
+                                          folds.loc[trn_idx]['attribute_ids'],
+                                          transform=get_transforms(data='train'),
+                                          #random_crop=RandomCropIfNeeded(),
+                                          is_Train=True)
+        valid_dataset = prepare_data.Data(params,
+                                          folds.loc[val_idx].reset_index(drop=True),
+                                          folds.loc[val_idx]['attribute_ids'],
+                                          transform=get_transforms(data='valid'),
+                                          #random_crop=RandomCropIfNeeded(),
+                                          is_Train=False)
+
+        train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
+        valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"], shuffle=False)
+
+        optimizer = Adam(model.parameters(), lr=params["lr"], amsgrad=False)
+        scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.75, patience=4, verbose=True, eps=1e-6)
+
+        criterion = nn.BCEWithLogitsLoss(reduction='mean')
+        best_score = 0.
+        best_thresh = 0.
+        best_loss = np.inf
+
+        for epoch in range(params["n_epochs"]):
+
+            start_time = time.time()
+
+            model.train()
+            avg_loss = 0.
+
+            optimizer.zero_grad()
+            tk0 = tqdm(enumerate(train_loader), total=len(train_loader))
+
+            for i, (images, labels) in tk0:
+                images = images.to(device)
+                labels = labels.to(device)
+                y_preds = model(images)
+                loss = criterion(y_preds, labels)
+
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                avg_loss += loss.item() / len(train_loader)
+
+            model.eval()
+            avg_val_loss = 0.
+            preds = []
+            valid_labels = []
+            tk1 = tqdm(enumerate(valid_loader), total=len(valid_loader))
+
+            for i, (images, labels) in tk1:
+                images = images.to(device)
+                labels = labels.to(device)
+
+                with torch.no_grad():
+                    y_preds = model(images)
+
+                preds.append(torch.sigmoid(y_preds).to('cpu').numpy())
+                valid_labels.append(labels.to('cpu').numpy())
+
+                loss = criterion(y_preds, labels)
+                avg_val_loss += loss.item() / len(valid_loader)
+
+            scheduler.step(avg_val_loss)
+
+            preds = np.concatenate(preds)
+            valid_labels = np.concatenate(valid_labels)
+            argsorted = preds.argsort(axis=1)
+
+            th_scores = {}
+            for threshold in [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15]:
+                _score = get_score(valid_labels, binarize_prediction(preds, threshold, argsorted))
+                th_scores[threshold] = _score
+
+            max_kv = max(th_scores.items(), key=lambda x: x[1])
+            th, score = max_kv[0], max_kv[1]
+
+            elapsed = time.time() - start_time
+
+            if score > best_score:
+                best_score = score
+                best_thresh = th
+                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_best_score_{:4f}.pth".format(FOLD+1, best_score)))
+
+            if avg_val_loss < best_loss:
+                best_loss = avg_val_loss
+                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_best_loss_{:4f}.pth".format(FOLD+1, best_loss)))
+
+if __name__ == '__main__':
+    Train()
