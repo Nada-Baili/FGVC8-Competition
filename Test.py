@@ -26,6 +26,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--Weights_Path', default="./model_paths_1000.pth", help="Path to the weights of the trained model")
 
 def Test(weights_path):
+    if not os.path.exists("./submissions"):
+        os.mkdir("./submissions")
+
     submission = pd.read_csv('./data/sample_solution.csv')
     test_dataset = prepare_data.Data(params,
                                       submission,

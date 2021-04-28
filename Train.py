@@ -23,6 +23,8 @@ else:
     device = "cpu"
 
 def Train():
+    if not os.path.exists("./results"):
+        os.mkdir("./results")
     today = datetime.now()
     output_path = "./results/{}".format(today.strftime("%H_%M_%S_%d_%m_%Y"))
     os.mkdir(output_path)
