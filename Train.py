@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from torchsummary import summary
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
+from focal_loss.focal_loss import FocalLoss
 
 from utils import *
 import prepare_data
@@ -29,12 +30,15 @@ def Train():
     today = datetime.now()
     output_path = "./results/{}".format(today.strftime("%H_%M_%S_%d_%m_%Y"))
     os.mkdir(output_path)
+    figures_path = os.path.join(output_path, "Plots")
+    if not os.path.exists(figures_path):
+        os.mkdir(figures_path)
 
     labels = pd.read_csv('./data/label_map.csv')
     train = pd.read_csv('./data/train-from-kaggle.csv')
 
-    #model = resnext(params["nb_classes"]).to(device)
-    model = se_resnext101_32x4d().to(device)
+    model = resnext(params["nb_classes"]).to(device)
+    #model = se_resnext101_32x4d().to(device)
     #print(summary(model, (3,320,320)))
 
     folds = train.copy()
@@ -71,8 +75,9 @@ def Train():
 
         optimizer = Adam(model.parameters(), lr=params["lr"], amsgrad=False)
         scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.75, patience=4, verbose=True, eps=1e-6)
+        #criterion = nn.BCEWithLogitsLoss(reduction='mean')
+        criterion = FocalLoss(alpha=1, gamma=2, reduction="mean")
 
-        criterion = nn.BCEWithLogitsLoss(reduction='mean')
         best_score = 0.
         best_thresh = 0.
         best_loss = np.inf
@@ -142,6 +147,13 @@ def Train():
             if avg_val_loss < best_loss:
                 best_loss = avg_val_loss
                 torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_best_loss_{:4f}.pth".format(FOLD+1, best_loss)))
+
+            plt.figure()
+            plt.plot(avg_loss, label="Train")
+            plt.plot(avg_val_loss, label="Val")
+            if not os.path.exists(os.path.join(figures_path, "Fold{}".format(FOLD+1))):
+                os.mkdir(os.path.join(figures_path, "Fold{}".format(FOLD+1)))
+            plt.savefig(os.path.join(figures_path, "Fold{}/epoch{}.png".format(FOLD+1, epoch+1)))
 
 if __name__ == '__main__':
     Train()
