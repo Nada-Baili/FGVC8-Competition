@@ -27,8 +27,11 @@ parser.add_argument('--Weights_Path', default="./model_paths_1000.pth", help="Pa
 
 def Test(weights_path):
     submission = pd.read_csv('./data/sample_solution.csv')
-    test_dataset = TestDataset(submission, transform=get_transforms(data='valid'))
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    test_dataset = prepare_data.Data(params,
+                                      submission,
+                                      transform=get_transforms(data='valid'),
+                                      is_Train=False)
+    test_loader = DataLoader(test_dataset, batch_size=params["batch_size"], shuffle=False)
 
     model = resnext(params["nb_classes"]).to(device)
     model.load_state_dict(torch.load(weights_path))
@@ -42,7 +45,7 @@ def Test(weights_path):
             y_preds = model(images)
         preds.append(torch.sigmoid(y_preds).to('cpu').numpy())
 
-    threshold = best_thresh
+    threshold = float(os.split(weights_path)[1].split(".")[0].split("_")[-1][7:-1])
     predictions = np.concatenate(preds) > threshold
     for i, row in enumerate(predictions):
         ids = np.nonzero(row)[0]

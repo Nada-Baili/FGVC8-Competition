@@ -1,10 +1,10 @@
 {
   "SEED": 43,
   "nb_classes": 3474,
-  "SIZE": 64,
+  "SIZE": 320,
   "channels": 3,
   "batch_size": 128,
   "n_folds": 5,
   "n_epochs": 10,
-  "lr": 1e-4,
+  "lr": 1e-4
 }

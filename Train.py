@@ -55,14 +55,12 @@ def Train():
                                           folds.loc[trn_idx].reset_index(drop=True),
                                           folds.loc[trn_idx]['attribute_ids'],
                                           transform=get_transforms(data='train'),
-                                          #random_crop=RandomCropIfNeeded(),
                                           is_Train=True)
         valid_dataset = prepare_data.Data(params,
                                           folds.loc[val_idx].reset_index(drop=True),
                                           folds.loc[val_idx]['attribute_ids'],
                                           transform=get_transforms(data='valid'),
-                                          #random_crop=RandomCropIfNeeded(),
-                                          is_Train=False)
+                                          is_Train=True)
 
         train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
         valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"], shuffle=False)
@@ -135,7 +133,7 @@ def Train():
             if score > best_score:
                 best_score = score
                 best_thresh = th
-                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_best_score_{:4f}.pth".format(FOLD+1, best_score)))
+                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestScore[{:4f}]_BestTh[{}].pth".format(FOLD+1, best_score, best_thresh)))
 
             if avg_val_loss < best_loss:
                 best_loss = avg_val_loss
