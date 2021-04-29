@@ -1,16 +1,18 @@
 import os, torch, time
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 import torch.nn as nn
 from datetime import datetime
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MultiLabelBinarizer
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+#from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from torch.utils.data import DataLoader
 from torchsummary import summary
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
 from focal_loss.focal_loss import FocalLoss
+#from Focal_Loss import FocalLoss
 
 from utils import *
 import prepare_data
@@ -38,12 +40,14 @@ def Train():
     train = pd.read_csv('./data/train-from-kaggle.csv')
 
     model = resnext(params["nb_classes"]).to(device)
-    #model = se_resnext101_32x4d().to(device)
+    #model = se_resnext101_32x4d("./pretrained_models/se_resnext101_32x4d.pth").to(device)
+    #model = se_resnext50_32x4d("./pretrained_models/se_resnext50_32x4d.pth").to(device)
+    #model = se_resnet50("./pretrained_models/se_resnet50.pth").to(device)
     #print(summary(model, (3,320,320)))
 
     folds = train.copy()
     folds = make_folds(folds, params["n_folds"], params["SEED"])
-    for FOLD in range(5):
+    for FOLD in range(params["n_epochs"]):
 
         trn_idx = folds[folds['fold'] != FOLD].index
         val_idx = folds[folds['fold'] == FOLD].index
@@ -77,10 +81,12 @@ def Train():
         scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.75, patience=4, verbose=True, eps=1e-6)
         #criterion = nn.BCEWithLogitsLoss(reduction='mean')
         criterion = FocalLoss(alpha=1, gamma=2, reduction="mean")
+        #criterion = FocalLoss()
 
         best_score = 0.
         best_thresh = 0.
         best_loss = np.inf
+        train_loss_epochs, val_loss_epochs = [], []
 
         for epoch in range(params["n_epochs"]):
 
@@ -96,13 +102,16 @@ def Train():
                 images = images.to(device)
                 labels = labels.to(device)
                 y_preds = model(images)
+                y_preds = nn.Softmax(dim=1)(y_preds)
                 loss = criterion(y_preds, labels)
 
                 loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-
                 avg_loss += loss.item() / len(train_loader)
+
+            train_loss_epochs.append(avg_loss)
+            print(train_loss_epochs)
 
             model.eval()
             avg_val_loss = 0.
@@ -123,6 +132,7 @@ def Train():
                 loss = criterion(y_preds, labels)
                 avg_val_loss += loss.item() / len(valid_loader)
 
+            val_loss_epochs.append(avg_val_loss)
             scheduler.step(avg_val_loss)
 
             preds = np.concatenate(preds)
@@ -146,11 +156,12 @@ def Train():
 
             if avg_val_loss < best_loss:
                 best_loss = avg_val_loss
-                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_best_loss_{:4f}.pth".format(FOLD+1, best_loss)))
+                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestLoss[{:4f}].pth".format(FOLD+1, best_loss)))
 
             plt.figure()
-            plt.plot(avg_loss, label="Train")
-            plt.plot(avg_val_loss, label="Val")
+            plt.plot(train_loss_epochs, m="o", label="Train")
+            plt.plot(val_loss_epochs, m="^", label="Val")
+            plt.legend()
             if not os.path.exists(os.path.join(figures_path, "Fold{}".format(FOLD+1))):
                 os.mkdir(os.path.join(figures_path, "Fold{}".format(FOLD+1)))
             plt.savefig(os.path.join(figures_path, "Fold{}/epoch{}.png".format(FOLD+1, epoch+1)))
