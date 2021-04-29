@@ -26,7 +26,10 @@ if torch.cuda.is_available():
 else:
     device = "cpu"
 
-def Train():
+parser = argparse.ArgumentParser()
+parser.add_argument('--Pretrained_model', default="None", help="Path to the weights of the pretrained model")
+
+def Train(pretrained_model):
     if not os.path.exists("./results"):
         os.mkdir("./results")
     today = datetime.now()
@@ -111,7 +114,6 @@ def Train():
                 avg_loss += loss.item() / len(train_loader)
 
             train_loss_epochs.append(avg_loss)
-            print(train_loss_epochs)
 
             model.eval()
             avg_val_loss = 0.
@@ -166,5 +168,10 @@ def Train():
                 os.mkdir(os.path.join(figures_path, "Fold{}".format(FOLD+1)))
             plt.savefig(os.path.join(figures_path, "Fold{}/epoch{}.png".format(FOLD+1, epoch+1)))
 
+            if epoch == params["Lr_decay_epoch"]:
+                optimizer.param_groups[0]["lr"] *= params["Lr_decay"]
+        torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_LastModel.pth".format(FOLD + 1)))
+
 if __name__ == '__main__':
-    Train()
+    args = parser.parse_args()
+    Train(pretrained=args.Pretrained_model)
