@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from collections import OrderedDict
-import math
+import math, torch
 
 import torch.nn as nn
 from torch.utils import model_zoo
@@ -362,11 +362,14 @@ class SENet(nn.Module):
         return x
 
 
-def initialize_pretrained_model(model, num_classes, settings):
-    #assert num_classes == settings['num_classes'], \
-    #    'num_classes should be {}, but is {}'.format(
-    #        settings['num_classes'], num_classes)
-    model.load_state_dict(model_zoo.load_url(settings['url']))
+def initialize_pretrained_model(model, num_classes, settings, pretrained_model_path):
+    assert num_classes == settings['num_classes'], \
+        'num_classes should be {}, but is {}'.format(
+            settings['num_classes'], num_classes)
+    try:
+        model.load_state_dict(model_zoo.load_url(settings['url']))
+    except:
+        model.load_state_dict(torch.load(pretrained_model_path))
     model.input_space = settings['input_space']
     model.input_size = settings['input_size']
     model.input_range = settings['input_range']
@@ -383,14 +386,15 @@ def senet154(num_classes=1000, pretrained='imagenet'):
     return model
 
 
-def se_resnet50(num_classes=1000, pretrained='imagenet'):
+def se_resnet50(pretrained_model_path, num_classes=1000, pretrained='imagenet'):
     model = SENet(SEResNetBottleneck, [3, 4, 6, 3], groups=1, reduction=16,
                   dropout_p=None, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
                   num_classes=num_classes)
     if pretrained is not None:
         settings = pretrained_settings['se_resnet50'][pretrained]
-        initialize_pretrained_model(model, num_classes, settings)
+        initialize_pretrained_model(model, num_classes, settings, pretrained_model_path)
+    model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model
 
 
@@ -416,23 +420,24 @@ def se_resnet152(num_classes=1000, pretrained='imagenet'):
     return model
 
 
-def se_resnext50_32x4d(num_classes=1000, pretrained='imagenet'):
+def se_resnext50_32x4d(pretrained_model_path, num_classes=1000, pretrained='imagenet'):
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   dropout_p=None, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
                   num_classes=num_classes)
     if pretrained is not None:
         settings = pretrained_settings['se_resnext50_32x4d'][pretrained]
-        initialize_pretrained_model(model, num_classes, settings)
+        initialize_pretrained_model(model, num_classes, settings,pretrained_model_path)
+    model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model
 
-def se_resnext101_32x4d(num_classes=1000, pretrained='imagenet'):
+def se_resnext101_32x4d(pretrained_model_path, num_classes=1000, pretrained='imagenet'):
     model = SENet(SEResNeXtBottleneck, [3, 4, 23, 3], groups=32, reduction=16,
                   dropout_p=None, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
                   num_classes=num_classes)
     if pretrained is not None:
         settings = pretrained_settings['se_resnext101_32x4d'][pretrained]
-        initialize_pretrained_model(model, num_classes, settings)
+        initialize_pretrained_model(model, num_classes, settings, pretrained_model_path)
     model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model

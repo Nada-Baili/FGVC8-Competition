@@ -4,12 +4,11 @@ import matplotlib.pyplot as plt
 from utils import params
 
 class Data:
-    def __init__(self, params, df, labels=None, transform=None, random_crop = None, is_Train=True):
+    def __init__(self, params, df, labels=None, transform=None, is_Train=True):
         self.df = df
         self.labels = labels
         self.transform = transform
         self.is_Train = is_Train
-        self.random_crop = random_crop
         self.params = params
 
     def __len__(self):
