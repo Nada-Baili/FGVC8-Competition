@@ -26,11 +26,12 @@ else:
 parser = argparse.ArgumentParser()
 parser.add_argument('--Weights_Path', default="./results/Fold1_BestScore[0.566719]_BestTh[0.05].pth", help="Path to the weights of the trained model")
 
-def Test(weights_path):
+def Test(weights_path, min_labels=1, max_labels=5):
     if not os.path.exists("./submissions"):
         os.mkdir("./submissions")
 
     submission = pd.read_csv('./data/sample_solution.csv')
+    submission = submission.iloc[:5]
     test_dataset = prepare_data.Data(params,
                                       submission,
                                       transform=get_transforms(data='valid'),
@@ -48,11 +49,14 @@ def Test(weights_path):
         with torch.no_grad():
             y_preds = model(images)
         preds.append(torch.sigmoid(y_preds).to('cpu').numpy())
+    preds = np.concatenate(preds)
+    sorted_preds = np.sort(preds)
 
     threshold = float(os.path.split(weights_path)[1].split("_")[-1][7:-5])
-    predictions = np.concatenate(preds) > threshold
+    predictions = sorted_preds > threshold
     for i, row in enumerate(predictions):
         ids = np.nonzero(row)[0]
+        ids = ids[-max(min_labels, min(len(ids), max_labels)):]
         submission.iloc[i].attribute_ids = ' '.join([str(x) for x in ids])
 
     today = datetime.now()
