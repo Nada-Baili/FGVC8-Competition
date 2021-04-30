@@ -62,12 +62,19 @@ def Train(pretrained_model):
         train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
         valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"], shuffle=False)
 
+        #model = resnext(params["nb_classes"]).to(device)
+        #model = se_resnext101_32x4d("./pretrained_models/se_resnext101_32x4d.pth").to(device)
+        model = se_resnext50_32x4d("./pretrained_models/se_resnext50_32x4d.pth").to(device)
+        #model = se_resnet50("./pretrained_models/se_resnet50.pth").to(device)
+        #print(summary(model, (3,320,320)))
+
         optimizer = Adam(model.parameters(), lr=params["lr"], amsgrad=False)
         scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.75, patience=4, verbose=True, eps=1e-6)
         #criterion = nn.BCEWithLogitsLoss(reduction='mean')
         criterion = FocalLoss(alpha=1, gamma=2, reduction="mean")
         #criterion = FocalLoss()
 
+        threshold = 0.05
         best_score = 0.
         best_thresh = 0.
         best_loss = np.inf
@@ -123,35 +130,39 @@ def Train(pretrained_model):
             valid_labels = np.concatenate(valid_labels)
             argsorted = preds.argsort(axis=1)
 
-            th_scores = {}
-            for threshold in [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15]:
-                _score = get_score(valid_labels, binarize_prediction(preds, threshold, argsorted))
-                th_scores[threshold] = _score
-
-            max_kv = max(th_scores.items(), key=lambda x: x[1])
-            th, score = max_kv[0], max_kv[1]
+            #th_scores = {}
+            #for threshold in [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15]:
+            print(threshold)
+            binarized_labels = binarize_prediction(preds, threshold, argsorted)
+            score = get_score(valid_labels, binarized_labels)
+            #th_scores[threshold] = _score
+            #max_kv = max(th_scores.items(), key=lambda x: x[1])
+            #th, score = max_kv[0], max_kv[1]
 
             elapsed = time.time() - start_time
 
             if score > best_score:
                 best_score = score
-                best_thresh = th
-                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestScore[{:4f}]_BestTh[{}].pth".format(FOLD+1, best_score, best_thresh)))
+                #best_thresh = th
+                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestScore[{:4f}]_BestTh[{:4f}].pth".format(FOLD+1, best_score, threshold)))
 
             if avg_val_loss < best_loss:
                 best_loss = avg_val_loss
                 torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestLoss[{:4f}].pth".format(FOLD+1, best_loss)))
 
+            correct_pred_conf = preds.view(-1)[valid_labels.view(-1) + binarized_labels.view(-1)==2]
+            threshold = torch.quantile(correct_pred_conf, 0.95)
+
             plt.figure()
-            plt.plot(train_loss_epochs, m="o", label="Train")
-            plt.plot(val_loss_epochs, m="^", label="Val")
+            plt.plot(train_loss_epochs, marker="o", label="Train")
+            plt.plot(val_loss_epochs, marker="^", label="Val")
             plt.legend()
             if not os.path.exists(os.path.join(figures_path, "Fold{}".format(FOLD+1))):
                 os.mkdir(os.path.join(figures_path, "Fold{}".format(FOLD+1)))
             plt.savefig(os.path.join(figures_path, "Fold{}/epoch{}.png".format(FOLD+1, epoch+1)))
 
-            if epoch == params["Lr_decay_epoch"]:
-                optimizer.param_groups[0]["lr"] *= params["Lr_decay"]
+            if epoch == params["lr_decay_epoch"]:
+                optimizer.param_groups[0]["lr"] *= params["lr_decay"]
         torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_LastModel.pth".format(FOLD + 1)))
 
 if __name__ == '__main__':
