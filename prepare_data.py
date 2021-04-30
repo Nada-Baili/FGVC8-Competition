@@ -17,14 +17,20 @@ class Data:
     def __getitem__(self, idx):
 
         file_name = self.df['id'].values[idx]
-        file_path = './data/train-1/train-1/{}.png'.format(file_name)
-        image = plt.imread(file_path)
+        if self.is_Train:
+            file_path = './data/train-1/train-1/{}.png'.format(file_name)
+        else:
+            file_path = './data/test/test/{}.jpg'.format(file_name)
+        image = cv2.imread(file_path)
         if len(image.shape)==2:
             image = np.stack((image, image, image), axis=-1)
 
         if self.transform:
-            augmented = self.transform(image=image)
-            image = augmented['image']
+            if len(image.shape)==0:
+                print(file_name)
+            else:
+                augmented = self.transform(image=image)
+                image = augmented['image']
 
         if self.is_Train:
             label = self.labels.values[idx]

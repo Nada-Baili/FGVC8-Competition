@@ -24,7 +24,7 @@ else:
     device = "cpu"
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--Weights_Path', default="./model_paths_1000.pth", help="Path to the weights of the trained model")
+parser.add_argument('--Weights_Path', default="./results/Fold1_BestScore[0.566719]_BestTh[0.05].pth", help="Path to the weights of the trained model")
 
 def Test(weights_path):
     if not os.path.exists("./submissions"):
@@ -37,7 +37,7 @@ def Test(weights_path):
                                       is_Train=False)
     test_loader = DataLoader(test_dataset, batch_size=params["batch_size"], shuffle=False)
 
-    model = se_resnext101_32x4d().to(device)
+    model = se_resnext50_32x4d("./pretrained_models/se_resnext50_32x4d.pth").to(device)
     model.load_state_dict(torch.load(weights_path))
 
     preds = []
@@ -49,7 +49,7 @@ def Test(weights_path):
             y_preds = model(images)
         preds.append(torch.sigmoid(y_preds).to('cpu').numpy())
 
-    threshold = float(os.split(weights_path)[1].split(".")[0].split("_")[-1][7:-1])
+    threshold = float(os.path.split(weights_path)[1].split("_")[-1][7:-5])
     predictions = np.concatenate(preds) > threshold
     for i, row in enumerate(predictions):
         ids = np.nonzero(row)[0]
