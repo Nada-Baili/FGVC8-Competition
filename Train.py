@@ -1,4 +1,4 @@
-import os, torch, time
+import os, torch, time, argparse
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch.nn as nn
@@ -12,7 +12,6 @@ from torchsummary import summary
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
 from focal_loss.focal_loss import FocalLoss
-#from Focal_Loss import FocalLoss
 
 from utils import *
 import prepare_data
@@ -42,12 +41,6 @@ def Train(pretrained_model):
     labels = pd.read_csv('./data/label_map.csv')
     train = pd.read_csv('./data/train-from-kaggle.csv')
 
-    model = resnext(params["nb_classes"]).to(device)
-    #model = se_resnext101_32x4d("./pretrained_models/se_resnext101_32x4d.pth").to(device)
-    #model = se_resnext50_32x4d("./pretrained_models/se_resnext50_32x4d.pth").to(device)
-    #model = se_resnet50("./pretrained_models/se_resnet50.pth").to(device)
-    #print(summary(model, (3,320,320)))
-
     folds = train.copy()
     folds = make_folds(folds, params["n_folds"], params["SEED"])
     for FOLD in range(params["n_epochs"]):
@@ -55,17 +48,6 @@ def Train(pretrained_model):
         trn_idx = folds[folds['fold'] != FOLD].index
         val_idx = folds[folds['fold'] == FOLD].index
 
-    # mlb = MultiLabelBinarizer()
-    # y = [[int(x) for x in row] for row in train.attribute_ids.str.split()]
-    # y = mlb.fit_transform(y)
-    # X = list(train.id)
-    #
-    # mskf = MultilabelStratifiedKFold(n_splits=5, shuffle=True, random_state=0)
-    # for train_index, test_index in mskf.split(X, y):
-    #     print("TRAIN:", train_index, "TEST:", test_index)
-    #     X_train, X_test = X[train_index], X[test_index]
-    #     y_train, y_test = y[train_index], y[test_index]
-    #
         train_dataset = prepare_data.Data(params,
                                           folds.loc[trn_idx].reset_index(drop=True),
                                           folds.loc[trn_idx]['attribute_ids'],
@@ -105,7 +87,7 @@ def Train(pretrained_model):
                 images = images.to(device)
                 labels = labels.to(device)
                 y_preds = model(images)
-                y_preds = nn.Softmax(dim=1)(y_preds)
+                y_preds = torch.sigmoid(y_preds)
                 loss = criterion(y_preds, labels)
 
                 loss.backward()
@@ -174,4 +156,4 @@ def Train(pretrained_model):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    Train(pretrained=args.Pretrained_model)
+    Train(args.Pretrained_model)
