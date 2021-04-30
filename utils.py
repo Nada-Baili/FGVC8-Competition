@@ -24,7 +24,7 @@ def get_score(targets, y_pred):
     return fbeta_score(targets, y_pred, beta=2, average='samples')
 
 def binarize_prediction(probabilities, threshold: float, argsorted=None,
-                        min_labels=1, max_labels=10):
+                        min_labels=1, max_labels=5):
     """
     Return matrix of 0/1 predictions, same shape as probabilities.
     """
