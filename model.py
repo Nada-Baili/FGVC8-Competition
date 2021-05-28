@@ -383,6 +383,7 @@ def senet154(num_classes=1000, pretrained='imagenet'):
     if pretrained is not None:
         settings = pretrained_settings['senet154'][pretrained]
         initialize_pretrained_model(model, num_classes, settings)
+    model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model
 
 
@@ -406,6 +407,7 @@ def se_resnet101(num_classes=1000, pretrained='imagenet'):
     if pretrained is not None:
         settings = pretrained_settings['se_resnet101'][pretrained]
         initialize_pretrained_model(model, num_classes, settings)
+    model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model
 
 
@@ -417,9 +419,9 @@ def se_resnet152(num_classes=1000, pretrained='imagenet'):
     if pretrained is not None:
         settings = pretrained_settings['se_resnet152'][pretrained]
         initialize_pretrained_model(model, num_classes, settings)
+    model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model
 
-#from torchsummary import summary
 def se_resnext50_32x4d(pretrained_model_path, num_classes=1000, pretrained='imagenet'):
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   dropout_p=None, inplanes=64, input_3x3=False,
@@ -428,7 +430,6 @@ def se_resnext50_32x4d(pretrained_model_path, num_classes=1000, pretrained='imag
     if pretrained is not None:
         settings = pretrained_settings['se_resnext50_32x4d'][pretrained]
         initialize_pretrained_model(model, num_classes, settings,pretrained_model_path)
-    #print(summary(model.cuda(), (3, 220, 220)))
     model.last_linear = nn.Linear(model.last_linear.in_features, 3474)
     return model
 

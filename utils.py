@@ -1,5 +1,6 @@
 import commentjson, collections, random
 from sklearn.metrics import fbeta_score
+import numpy as np
 
 with open("./params.json") as json_file:
     params = commentjson.load(json_file)
