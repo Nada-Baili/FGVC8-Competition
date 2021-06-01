@@ -1,7 +1,5 @@
-import torch, random
-#import torch.nn.functional as F
 import albumentations.augmentations.functional as F
-from albumentations import Compose, Normalize, Resize, RandomResizedCrop, HorizontalFlip, RandomBrightness, RandomContrast, ShiftScaleRotate, IAAAdditiveGaussianNoise, OneOf, RandomCrop
+from albumentations import Compose, Normalize, Resize, HorizontalFlip, RandomBrightnessContrast, ShiftScaleRotate, IAAAdditiveGaussianNoise, RandomCrop
 from albumentations.pytorch import ToTensorV2
 
 from utils import *
@@ -24,10 +22,7 @@ def get_transforms(*, data):
             Resize(params["SIZE"], params["SIZE"]),
             RandomCropIfNeeded(params["SIZE"]*2, params["SIZE"]*2),
             HorizontalFlip(p=0.5),
-            OneOf([
-                RandomBrightness(0.1, p=1),
-                RandomContrast(0.1, p=1),
-            ], p=0.3),
+            RandomBrightnessContrast(p=0.3),
             ShiftScaleRotate(shift_limit=0.1, scale_limit=0.0, rotate_limit=15, p=0.3),
             IAAAdditiveGaussianNoise(p=0.3),
 

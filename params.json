@@ -3,11 +3,8 @@
   "nb_classes": 3474,
   "SIZE": 224,
   "channels": 3,
-  "batch_size": 10,
+  "batch_size": 100,
   "n_folds": 5,
-  "n_epochs": 10,
-  "lr": 1e-4,
-   "lr_decay_epoch": 10,
-  "lr_decay": 0.1
-
+  "n_epochs": 30,
+  "lr": 4e-4
 }
