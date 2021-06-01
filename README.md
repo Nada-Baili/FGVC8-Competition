@@ -7,6 +7,8 @@ The provided dataset contains a large number of artwork images annotated with th
 
 The competition metric, F2 score, was intentionally chosen to provide some robustness against noisy labels, favoring recall over precision.
 
+![alt text](https://github.com/Nada-Baili/FGVC8-Competition/blob/2b1c80440682446a3250f6d8ebb18102dce6d42d/header.png "Example images")
+
 ## Proposed Solution
 ### Data Preprocessing: 
 * Random crop if needed
