@@ -23,7 +23,6 @@ else:
     device = "cpu"
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--Pretrained_model', default="None", help="Path to the weights of the pretrained model")
 parser.add_argument('--Model_Name', default="se_resnext50", help="se_resnext50, se_resnext101, resnet18, vgg16bn")
 
 def Train(model_name):
@@ -159,4 +158,4 @@ def Train(model_name):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    Train(args.Pretrained_model, args.Model_Name)
+    Train(args.Model_Name)
