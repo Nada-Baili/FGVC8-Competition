@@ -1,22 +1,19 @@
-import os, torch, time, argparse, collections
+import os, torch, argparse
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch.nn as nn
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MultiLabelBinarizer
-#from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from torch.utils.data import DataLoader
-from torchsummary import summary
-from torch.optim import Adam, SGD
-from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
+from torch.optim import Adam
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from focal_loss.focal_loss import FocalLoss
+import torchvision.models as models
 
 from utils import *
 import prepare_data
 from transform import *
-from ResNext import resnext
 from model import *
 
 if torch.cuda.is_available():
@@ -27,8 +24,9 @@ else:
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--Pretrained_model', default="None", help="Path to the weights of the pretrained model")
+parser.add_argument('--Model_Name', default="se_resnext50", help="se_resnext50, se_resnext101, resnet18, vgg16bn")
 
-def Train(pretrained_model):
+def Train(model_name):
     if not os.path.exists("./results"):
         os.mkdir("./results")
     today = datetime.now()
@@ -40,14 +38,13 @@ def Train(pretrained_model):
 
     labels = pd.read_csv('./data/label_map.csv')
     train = pd.read_csv('./data/train-from-kaggle.csv')
-    train = train.iloc[:50]
 
     attributes = [l.split("::")[0] for l in list(labels["attribute_name"])]
     names = np.unique(attributes)
 
     folds = train.copy()
     folds = make_folds(folds, params["n_folds"], params["SEED"])
-    for FOLD in range(params["n_epochs"]):
+    for FOLD in range(params["n_folds"]):
         print("Fold {}".format(FOLD+1))
         trn_idx = folds[folds['fold'] != FOLD].index
         val_idx = folds[folds['fold'] == FOLD].index
@@ -66,34 +63,28 @@ def Train(pretrained_model):
         train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
         valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"], shuffle=False)
 
-        #model = resnext(params["nb_classes"]).to(device)
-        #model = se_resnext101_32x4d("./pretrained_models/se_resnext101_32x4d.pth").to(device)
-        model = se_resnext50_32x4d("./pretrained_models/se_resnext50_32x4d.pth").to(device)
-        #model = se_resnet50("./pretrained_models/se_resnet50.pth").to(device)
-        #print(summary(model, (3,320,320)))
+        if model_name == "se_resnext50":
+            model = se_resnext50_32x4d().to(device)
+        elif model_name == "se_resnext101":
+            model = se_resnext101_32x4d().to(device)
+        elif model_name == "resnet18":
+            model=models.resnet18(pretrained=True)
+            model.avgpool=nn.AdaptiveAvgPool2d(1)
+            model.fc=nn.Linear(model.fc.in_features, params["nb_classes"])
+            model=model.to(device)
+        elif model_name == "vgg16bn":
+            model=models.vgg16_bn(pretrained=True)
+            model.classifier[6] = nn.Linear(4096,params["nb_classes"])
+            model=model.to(device)
 
-        optimizer = Adam(model.parameters(), lr=params["lr"], amsgrad=False)
-        #scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.75, patience=4, verbose=True, eps=1e-6)
-        scheduler = CosineAnnealingLR(optimizer, params["n_epochs"], eta_min=1e-6, verbose=True)
-        #criterion = nn.BCEWithLogitsLoss(reduction='mean')
-        criterion = FocalLoss(alpha=1, gamma=2, reduction="mean")
-        #criterion = FocalLoss()
+        optimizer = Adam(model.parameters(), lr=params["lr"])
+        scheduler = CosineAnnealingLR(optimizer, params["n_epochs"], eta_min=0, verbose=True)
+        criterion = FocalLoss(alpha=0.25, gamma=2, reduction="mean")
 
-        th = {}#0.05
-        for att in names:
-            th[att]=0.05
-        threshold = np.zeros(params["nb_classes"])
         best_score = 0.
-        best_thresh = 0.
-        best_loss = np.inf
         train_loss_epochs, val_loss_epochs = [], []
 
         for epoch in range(params["n_epochs"]):
-            #threshold = np.repeat(np.array(list(th.values())), list(collections.Counter(attributes).values()))
-            for att in names:
-                threshold[np.where(np.array(attributes) == att)[0]]=th[att]
-            print(th)
-            start_time = time.time()
 
             model.train()
             avg_loss = 0.
@@ -108,9 +99,10 @@ def Train(pretrained_model):
                 y_preds = torch.sigmoid(y_preds)
                 loss = criterion(y_preds, labels)
 
+                optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                optimizer.zero_grad()
+                
                 avg_loss += loss.item() / len(train_loader)
 
             train_loss_epochs.append(avg_loss)
@@ -127,63 +119,33 @@ def Train(pretrained_model):
 
                 with torch.no_grad():
                     y_preds = model(images)
-
-                preds.append(torch.sigmoid(y_preds).to('cpu').numpy())
+                y_preds = torch.sigmoid(y_preds)
+                preds.append(y_preds.to('cpu').numpy())
                 valid_labels.append(labels.to('cpu').numpy())
 
                 loss = criterion(y_preds, labels)
                 avg_val_loss += loss.item() / len(valid_loader)
 
             val_loss_epochs.append(avg_val_loss)
-            scheduler.step()#(avg_val_loss)
+            scheduler.step()
 
             preds = np.concatenate(preds)
             valid_labels = np.concatenate(valid_labels)
             argsorted = preds.argsort(axis=1)
 
-            #th_scores = {}
-            #for threshold in [0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15]:
-            binarized_labels = binarize_prediction(preds, threshold, argsorted)
-            score = get_score(valid_labels, binarized_labels)
-            #th_scores[threshold] = _score
-            #max_kv = max(th_scores.items(), key=lambda x: x[1])
-            #th, score = max_kv[0], max_kv[1]
+            th_scores = {}
+            for threshold in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.5,1.6,1.7,1.8,1.9,2.0]:
+               binarized_labels = binarize_prediction(preds, threshold, argsorted, max_labels=5)
+               _score = get_score(valid_labels, binarized_labels)
+               th_scores[threshold] = _score
 
-            elapsed = time.time() - start_time
+            max_kv = max(th_scores.items(), key=lambda x: x[1])
+            th, score = max_kv[0], max_kv[1]
 
             if score > best_score:
                 best_score = score
-                #best_thresh = th
-                #torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestScore[{:4f}]_BestTh[{:4f}].pth".format(FOLD+1, best_score, threshold)))
-                torch.save(model.state_dict(), os.path.join(output_path,
-                                                            "Fold{}_BestScore[{:4f}].pth".format(FOLD + 1, best_score)))
-
-            if avg_val_loss < best_loss:
-                best_loss = avg_val_loss
-                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestLoss[{:4f}].pth".format(FOLD+1, best_loss)))
-
-            # correct_pred_conf = torch.tensor(preds).view(-1)[(torch.tensor(valid_labels).view(-1) + torch.tensor(binarized_labels).view(-1))==2]
-            # try:
-            #      q = torch.quantile(correct_pred_conf, 0.95).item()
-            #      threshold = q
-            # except:
-            #     continue
-
-            for att in names:
-                mask = torch.tensor(np.array(attributes) == att)
-                masked_preds = torch.tensor(preds)[:, mask]
-                masked_valid_labels = torch.tensor(valid_labels)[:, mask]
-                masked_binarized_labels = torch.tensor(binarized_labels)[:, mask]
-
-                correct_pred_conf = masked_preds.view(-1)[
-                    masked_valid_labels.view(-1) + masked_binarized_labels.view(-1) == 2]
-                if len (correct_pred_conf)!=0:
-                    print("THRESHOLD CHANGES")
-                try:
-                    q = torch.quantile(correct_pred_conf, 0.95).item()
-                    th[att] = q
-                except:
-                    continue
+                best_thresh = th
+                torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_BestScore[{:4f}]_BestTh[{:4f}].pth".format(FOLD+1, best_score, best_thresh)))
 
             plt.figure()
             plt.plot(train_loss_epochs, marker="o", label="Train")
@@ -193,10 +155,8 @@ def Train(pretrained_model):
                 os.mkdir(os.path.join(figures_path, "Fold{}".format(FOLD+1)))
             plt.savefig(os.path.join(figures_path, "Fold{}/epoch{}.png".format(FOLD+1, epoch+1)))
 
-            #if epoch == params["lr_decay_epoch"]:
-            #    optimizer.param_groups[0]["lr"] *= params["lr_decay"]
         torch.save(model.state_dict(), os.path.join(output_path, "Fold{}_LastModel.pth".format(FOLD + 1)))
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    Train(args.Pretrained_model)
+    Train(args.Pretrained_model, args.Model_Name)

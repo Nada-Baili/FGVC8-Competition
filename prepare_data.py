@@ -1,5 +1,6 @@
 import cv2, torch
 import numpy as np
+import matplotlib.pyplot as plt
 from utils import params
 
 class Data:
@@ -21,7 +22,6 @@ class Data:
         else:
             file_path = './data/test/test/{}.jpg'.format(file_name)
         image = cv2.imread(file_path)
-
         if len(image.shape)==2:
             image = np.stack((image, image, image), axis=-1)
 
